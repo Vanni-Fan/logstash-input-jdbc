@@ -98,6 +98,9 @@ module LogStash  module PluginMixins module Jdbc
       config :connection_retry_attempts, :validate => :number, :default => 1
       # Number of seconds to sleep between connection attempts
       config :connection_retry_attempts_wait_time, :validate => :number, :default => 0.5
+
+      # 是否内部分页
+      config :internal_paging, :validate => :boolean, :default=>false
     end
 
     private
@@ -248,9 +251,27 @@ module LogStash  module PluginMixins module Jdbc
     private
     def perform_query(query)
       if @jdbc_paging_enabled
-        query.each_page(@jdbc_page_size) do |paged_dataset|
-          paged_dataset.each do |row|
-            yield row
+        if @internal_paging # 替换内部的分页语句
+          page = 0
+          while page*@jdbc_page_size < query.count do
+            offset = page * @jdbc_page_size
+            if query.opts[:sql].str.match /LIMIT \d+ OFFSET \d+/
+              query.opts[:sql].str.replace query.opts[:sql].str.gsub(/LIMIT (\d+) OFFSET \d+/, "LIMIT \\1 OFFSET #{offset}")
+            else
+              query.opts[:sql].str.concat " LIMIT #{@jdbc_page_size} OFFSET 0 /* REPLACE BY VANNI */"
+            end
+            # 传统查询
+            @logger.info("[internal paging sql]:".concat(query.opts[:sql].str))
+            query.each do |row|
+              yield row
+            end
+            page += 1
+          end
+        else # 默认分页查询
+          query.each_page(@jdbc_page_size) do |paged_dataset|
+            paged_dataset.each do |row|
+              yield row
+            end
           end
         end
       else
