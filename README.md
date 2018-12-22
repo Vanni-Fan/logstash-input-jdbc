@@ -87,7 +87,7 @@ bin/plugin install /your/local/plugin/logstash-input-jdbc.gem
 ## Example configuration
 
 Reading data from MySQL:  
-
+```
 	input {
 	  jdbc {
 	    jdbc_driver_library => "/path/to/mysql-connector-java-5.1.33-bin.jar"
@@ -99,6 +99,9 @@ Reading data from MySQL:
 	    statement => "SELECT ..."
 	    jdbc_paging_enabled => "true"
 	    jdbc_page_size => "50000"
+
+        # Paging SQL does not use subqueries.
+        internal_paging => "true"
 	  }
 	}
 
@@ -115,6 +118,35 @@ Reading data from MySQL:
 	    index => "myindex"
 	  }
 	}
+```
+
+### Subquery performance
+
+```sql
+mysql> select count(1) from smg_mem_users;
++----------+
+| count(1) |
++----------+
+|  1190765 |
++----------+
+1 row in set (0.17 sec)
+
+mysql> select 'private' from (select * from smg_mem_users) as t1 limit 1 offset 0;
++---------+
+| private |
++---------+
+| private |
++---------+
+1 row in set (6.36 sec)
+
+mysql> select 'private' from smg_mem_users limit 1 offset 0;
++---------+
+| private |
++---------+
+| private |
++---------+
+1 row in set (0.00 sec)
+```
 
 ## Contributing
 
